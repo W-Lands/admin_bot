@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  wlands-bot:
+    build: .
+    networks: ['wlands']
+    volumes: ['bot_db:/db']
+    environment:
+      - ADMIN_IDS=${ADMIN_IDS}
+      - API_HASH=${API_HASH}
+      - API_ID=${API_ID}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DATABASE_URL=${DATABASE_URL}
+      - INTERNAL_AUTH_TOKEN=${INTERNAL_AUTH_TOKEN}
+    restart: unless-stopped
+
+networks:
+  wlands-api_wlands:
+    external: true
+
+volumes:
+  bot_db:
+    driver: local
