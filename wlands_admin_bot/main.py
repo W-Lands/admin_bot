@@ -4,8 +4,8 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from tortoise import Tortoise
 
-from wlands_admin_bot.config import API_HASH, API_ID, BOT_TOKEN, ADMIN_IDS, INTERNAL_AUTH_TOKEN, DATABASE_URL
-from wlands_admin_bot.models.wl_user import WlUser
+from .config import API_HASH, API_ID, BOT_TOKEN, ADMIN_IDS, INTERNAL_AUTH_TOKEN, DATABASE_URL
+from .models.wl_user import WlUser
 
 bot = Client(
     "wlands-admin",
