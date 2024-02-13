@@ -3,7 +3,7 @@ version: '3'
 services:
   wlands-bot:
     build: .
-    networks: ['wlands']
+    networks: ['wlands-api_wlands']
     volumes: ['bot_db:/db']
     environment:
       - ADMIN_IDS=${ADMIN_IDS}
