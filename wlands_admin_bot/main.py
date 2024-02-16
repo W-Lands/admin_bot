@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from aerich import Command
 from httpx import AsyncClient
 from pyrogram import Client, filters, idle
 from pyrogram.enums import ParseMode
@@ -70,7 +73,7 @@ async def register_command(_, message: Message):
     async with AsyncClient() as client:
         resp = await client.post("http://wlands-api-internal:9080/users/", json=data, headers=headers)
         if resp.status_code == 200:
-            return await message.reply_text(f"User created!")
+            return await message.reply_text(f"User created! Email: {args[0][:32]}@wlands.pepega")
 
         if resp.status_code == 400:
             return await message.reply_text(resp.json()["error_message"])
@@ -80,6 +83,20 @@ async def register_command(_, message: Message):
 
 
 async def run():
+    migrations_dir = Path(DATABASE_URL.split("://")).parent / "migrations"
+
+    command = Command({
+        "connections": {"default": DATABASE_URL},
+        "apps": {"models": {"models": ["wlands_admin_bot.models", "aerich.models"], "default_connection": "default"}},
+    }, location=str(migrations_dir))
+    await command.init()
+    if Path(migrations_dir).exists():
+        await command.migrate()
+        await command.upgrade(True)
+    else:
+        await command.init_db(True)
+    await Tortoise.close_connections()
+
     await Tortoise.init(db_url=DATABASE_URL, modules={"models": ["wlands_admin_bot.models"]}, _create_db=True)
     await Tortoise.generate_schemas(True)
 

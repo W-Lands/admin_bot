@@ -12,6 +12,7 @@ pyrogram = "^2.0.106"
 tgcrypto = "^1.2.5"
 httpx = "^0.26.0"
 tortoise-orm = "^0.20.0"
+aerich = "^0.7.2"
 
 
 [build-system]
