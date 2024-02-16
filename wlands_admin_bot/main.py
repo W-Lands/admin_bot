@@ -31,7 +31,7 @@ async def whitelist_command(_, message: Message):
     match args[0]:
         case "view":
             users = await WlUser.all()
-            user_ids = "\n".join([f"  - {user.id}" + f" ({user.desc})" if user.desc else "" for user in users])
+            user_ids = "\n".join([f"  - {user.id}" + (f" ({user.desc})" if user.desc else "") for user in users])
             await message.reply_text(f"Users:\n\n{user_ids}")
         case "add":
             if not args[1].isdigit():
