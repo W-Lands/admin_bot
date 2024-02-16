@@ -17,6 +17,7 @@ bot = Client(
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
 )
+HEADERS = {"Authorization": INTERNAL_AUTH_TOKEN}
 
 
 @bot.on_message(filters.command("whitelist") & filters.user(ADMIN_IDS))
@@ -29,8 +30,8 @@ async def whitelist_command(_, message: Message):
 
     match args[0]:
         case "view":
-            user_ids = await WlUser.all().values_list("id", flat=True)
-            user_ids = "\n".join([f"  - {user_id}" for user_id in user_ids])
+            users = await WlUser.all()
+            user_ids = "\n".join([f"  - {user.id}" + f" ({user.desc})" if user.desc else "" for user in users])
             await message.reply_text(f"Users:\n\n{user_ids}")
         case "add":
             if not args[1].isdigit():
@@ -69,10 +70,9 @@ async def register_command(_, message: Message):
         "email": f"{args[0][:32]}@wlands.pepega",
         "telegram_id": message.from_user.id,
     }
-    headers = {"Authorization": INTERNAL_AUTH_TOKEN}
 
     async with AsyncClient() as client:
-        resp = await client.post("http://wlands-api-internal:9080/users/", json=data, headers=headers)
+        resp = await client.post("http://wlands-api-internal:9080/users/", json=data, headers=HEADERS)
         if resp.status_code == 200:
             await user.update(wlmc_id=resp.json()["id"])
             return await message.reply_text(f"User created! Email: {args[0][:32]}@wlands.pepega")
@@ -88,7 +88,9 @@ async def register_command(_, message: Message):
 async def user_command(_, message: Message):
     USAGE = ("Usage:\n/user [ "
              "view <id: int> | "
-             "change <id: int> <property: \"wlmc_id\" | \"desc\"> <new_value: str> "
+             "change <id: int> <property: \"wlmc_id\" | \"desc\"> <new_value: str> | "
+             "ban <id: int> | "
+             "unban <id: int> "
              "]")
 
     args = message.text.split(" ")[1:]
@@ -119,6 +121,18 @@ async def user_command(_, message: Message):
             await user.update(**upd)
 
             await message.reply_text("Updated!")
+        case "ban" | "unban":
+            act = args[0]
+
+            if user.wlmc_id is None:
+                return await message.reply(f"No wlmc user is associated with {user.id}")
+            async with AsyncClient() as client:
+                resp = await client.post(f"http://wlands-api-internal:9080/users/{user.wlmc_id}/{act}", headers=HEADERS)
+                if resp.status_code == 204:
+                    return await message.reply_text(f"User {act}ned!")
+
+                if resp.status_code == 400:
+                    return await message.reply_text(resp.json()["error_message"])
         case _:
             await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
 
