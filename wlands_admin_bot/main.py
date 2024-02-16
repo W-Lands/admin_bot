@@ -103,7 +103,7 @@ async def user_command(_, message: Message):
         case "view":
             await message.reply_text(f"Info about user {user_id}:\n\n"
                                      f"Id: `{user_id}`\n"
-                                     f"Description: `{user.description}`\n"
+                                     f"Description: `{user.desc}`\n"
                                      f"WLMC id: `{user.wlmc_id}`")
         case "change":
             if args[2] not in {"wlmc_id", "desc"}:
@@ -114,7 +114,7 @@ async def user_command(_, message: Message):
             if prop == "wlmc_id":
                 upd = {"wlmc_id": UUID(new_value)}
             else:
-                upd = {"description": new_value}
+                upd = {"desc": new_value}
 
             await user.update(**upd)
 

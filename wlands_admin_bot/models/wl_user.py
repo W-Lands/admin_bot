@@ -6,5 +6,5 @@ from tortoise import fields
 
 class WlUser(Model):
     id: int = fields.BigIntField(pk=True)
-    description: str = fields.CharField(max_length=128)
+    desc: str = fields.CharField(max_length=128, default="")
     wlmc_id: UUID = fields.UUIDField(null=True, default=None)
