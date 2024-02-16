@@ -83,7 +83,7 @@ async def register_command(_, message: Message):
 
 
 async def run():
-    migrations_dir = Path(DATABASE_URL.split("://")).parent / "migrations"
+    migrations_dir = Path(DATABASE_URL.split("://")[1]).parent / "migrations"
 
     command = Command({
         "connections": {"default": DATABASE_URL},
