@@ -1,4 +1,5 @@
 from pathlib import Path
+from uuid import UUID
 
 from aerich import Command
 from httpx import AsyncClient
@@ -55,7 +56,7 @@ async def whitelist_command(_, message: Message):
 async def register_command(_, message: Message):
     USAGE = "Usage:\n/register <login: string> <password: string>"
 
-    if not await WlUser.filter(id=message.from_user.id).exists() and message.from_user.id not in ADMIN_IDS:
+    if (user := await WlUser.get_or_none(id=message.from_user.id)) is None and message.from_user.id not in ADMIN_IDS:
         return
 
     args = message.text.split(" ")[1:]
@@ -73,6 +74,7 @@ async def register_command(_, message: Message):
     async with AsyncClient() as client:
         resp = await client.post("http://wlands-api-internal:9080/users/", json=data, headers=headers)
         if resp.status_code == 200:
+            await user.update(wlmc_id=resp.json()["id"])
             return await message.reply_text(f"User created! Email: {args[0][:32]}@wlands.pepega")
 
         if resp.status_code == 400:
@@ -80,6 +82,45 @@ async def register_command(_, message: Message):
 
         print(f"{resp.status_code} | {resp.text}")
         return await message.reply_text(f"Failed to create user!")
+
+
+@bot.on_message(filters.command("user") & filters.user(ADMIN_IDS))
+async def user_command(_, message: Message):
+    USAGE = ("Usage:\n/user [ "
+             "view <id: int> | "
+             "change <id: int> <property: \"wlmc_id\" | \"desc\"> <new_value: str> "
+             "]")
+
+    args = message.text.split(" ")[1:]
+    if len(args) < 2 or (args[0] == "change" and len(args) < 4) or not args[1].isdigit():
+        return await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
+
+    user_id = int(args[1])
+    if (user := await WlUser.get_or_none(id=user_id)) is None:
+        return await message.reply_text("User with this is not found!")
+
+    match args[0]:
+        case "view":
+            await message.reply_text(f"Info about user {user_id}:\n\n"
+                                     f"Id: `{user_id}`\n"
+                                     f"Description: `{user.description}`\n"
+                                     f"WLMC id: `{user.wlmc_id}`")
+        case "change":
+            if args[2] not in {"wlmc_id", "desc"}:
+                return await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
+
+            prop = args[2]
+            new_value = args[3]
+            if prop == "wlmc_id":
+                upd = {"wlmc_id": UUID(new_value)}
+            else:
+                upd = {"description": new_value}
+
+            await user.update(**upd)
+
+            await message.reply_text("Updated!")
+        case _:
+            await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
 
 
 async def run():
