@@ -149,12 +149,24 @@ async def user_command(_, message: Message):
         return await message.reply(f"No wlmc user is associated with your telegram account!")
     chat = message.chat
 
-    await message.reply_text("Send new skin (64x64) as file")
+    await message.reply_text("Send new skin (64x64) as file, or send /delete to remove your current skin")
     got_skin = False
     for _ in range(5):
         msg = await wait.wait_for(chat)
         if msg.media != MessageMediaType.DOCUMENT and msg.text.startswith("/cancel"):
             return await msg.reply("Cancelled.")
+        if msg.media != MessageMediaType.DOCUMENT and msg.text.startswith("/delete"):
+            async with AsyncClient() as client:
+                resp = await client.patch(f"http://wlands-api-internal:9080/users/{user.wlmc_id}", json={"skin": ""},
+                                          headers=HEADERS)
+                if resp.status_code == 200:
+                    return await message.reply_text(f"Skin removed!")
+
+                if resp.status_code == 400:
+                    return await message.reply_text(resp.json()["error_message"])
+
+                print(f"{resp.status_code} | {resp.text}")
+                return await message.reply_text(f"Failed to removed skin!")
         if msg.media != MessageMediaType.DOCUMENT:
             await msg.reply("Send new skin AS FILE (document). To cancel, send /cancel command.")
             continue
