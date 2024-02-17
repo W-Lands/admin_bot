@@ -1,11 +1,34 @@
-from pyrogram import filters
-from pyrogram.types import Message
+from asyncio import Future, Lock
+
+from pyrogram import Client
+from pyrogram.handlers import MessageHandler
+from pyrogram.types import Chat, Message
 
 
-def user_filter(*user_ids):
-    async def check(flt, __, message: Message) -> bool:
-        if message.from_user is None:
-            return False
-        return message.from_user.id in flt.user_ids
+class WaitForMessage:
+    def __init__(self, client: Client):
+        self._client = client
+        self._handlers: dict[int, list[Future]] = {}
+        self._locks: dict[int, Lock] = {}
 
-    return filters.create(check, user_ids=user_ids)
+        client.add_handler(MessageHandler(self._listener), group=1)
+
+    async def _listener(self, _: Client, message: Message) -> None:
+        chat_id = message.chat.id
+        if chat_id not in self._handlers:
+            return
+
+        self._locks[chat_id] = lock = self._locks.get(chat_id, Lock())
+        async with lock:
+            for future in self._handlers[chat_id]:
+                future.set_result(message)
+
+            self._handlers[chat_id].clear()
+
+    def wait_for(self, chat: Chat) -> Future[Message]:
+        future = self._client.loop.create_future()
+        if chat.id not in self._handlers:
+            self._handlers[chat.id] = []
+
+        self._handlers[chat.id].append(future)
+        return future

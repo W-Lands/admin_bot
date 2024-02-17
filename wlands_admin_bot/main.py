@@ -1,13 +1,16 @@
+from base64 import b64encode
+from io import BytesIO
 from pathlib import Path
 from uuid import UUID
 
 from aerich import Command
 from httpx import AsyncClient
 from pyrogram import Client, filters, idle
-from pyrogram.enums import ParseMode
+from pyrogram.enums import ParseMode, MessageMediaType
 from pyrogram.types import Message
 from tortoise import Tortoise
 
+from wlands_admin_bot.utils import WaitForMessage
 from .config import API_HASH, API_ID, BOT_TOKEN, ADMIN_IDS, INTERNAL_AUTH_TOKEN, DATABASE_URL
 from .models.wl_user import WlUser
 
@@ -17,6 +20,7 @@ bot = Client(
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
 )
+wait = WaitForMessage(bot)
 HEADERS = {"Authorization": INTERNAL_AUTH_TOKEN}
 
 
@@ -135,6 +139,48 @@ async def user_command(_, message: Message):
                     return await message.reply_text(resp.json()["error_message"])
         case _:
             await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
+
+
+@bot.on_message(filters.command("skin"))
+async def user_command(_, message: Message):
+    if (user := await WlUser.get_or_none(id=message.from_user.id)) is None and message.from_user.id not in ADMIN_IDS:
+        return
+    if user.wlmc_id is None:
+        return await message.reply(f"No wlmc user is associated with your telegram account!")
+    chat = message.chat
+
+    await message.reply_text("Send new skin (64x64) as file")
+    got_skin = False
+    for _ in range(5):
+        msg = await wait.wait_for(chat)
+        if msg.media != MessageMediaType.DOCUMENT and msg.text.startswith("/cancel"):
+            return await msg.reply("Cancelled.")
+        if msg.media != MessageMediaType.DOCUMENT:
+            await msg.reply("Send new skin AS FILE (document). To cancel, send /cancel command.")
+            continue
+        if msg.document.file_size > 64 * 1024:
+            await msg.reply("File is too big (maximum size is 64kb)")
+            continue
+        got_skin = True
+        break
+
+    if not got_skin:
+        return await message.reply("To change skin, send /skin command again.")
+
+    image: BytesIO = await msg.download(in_memory=True)
+    data = {
+        "skin": f"data:image/png;base64,{b64encode(image.getvalue()).decode('ut8')}",
+    }
+    async with AsyncClient() as client:
+        resp = await client.patch(f"http://wlands-api-internal:9080/users/{user.wlmc_id}", json=data, headers=HEADERS)
+        if resp.status_code == 200:
+            return await message.reply_text(f"Skin changed!")
+
+        if resp.status_code == 400:
+            return await message.reply_text(resp.json()["error_message"])
+
+        print(f"{resp.status_code} | {resp.text}")
+        return await message.reply_text(f"Failed to change skin!")
 
 
 async def run():
