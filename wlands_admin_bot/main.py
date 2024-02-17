@@ -169,7 +169,7 @@ async def user_command(_, message: Message):
 
     image: BytesIO = await msg.download(in_memory=True)
     data = {
-        "skin": f"data:image/png;base64,{b64encode(image.getvalue()).decode('ut8f')}",
+        "skin": f"data:image/png;base64,{b64encode(image.getvalue()).decode('utf8')}",
     }
     async with AsyncClient() as client:
         resp = await client.patch(f"http://wlands-api-internal:9080/users/{user.wlmc_id}", json=data, headers=HEADERS)
