@@ -66,7 +66,7 @@ async def register_command(_, message: Message):
 
     args = message.text.split(" ")[1:]
     if len(args) < 2:
-        return await message.reply_text(USAGE)
+        return await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
 
     data = {
         "login": args[0][:32],
