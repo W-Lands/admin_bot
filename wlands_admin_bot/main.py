@@ -24,12 +24,17 @@ wait = WaitForMessage(bot)
 HEADERS = {"Authorization": INTERNAL_AUTH_TOKEN}
 
 
-@bot.on_message(filters.command("whitelist") & filters.user(ADMIN_IDS))
+@bot.on_message(filters.command("whitelist"))
 async def whitelist_command(_, message: Message):
-    USAGE = "Usage:\n/whitelist [ view | add <id: int> | remove <id: int> ]"
+    USAGE = "Usage:\n/whitelist [ view | add <id: int> | remove <id: int> | accept <id: int> | reject <id: int> ]"
+    if message.from_user.id not in ADMIN_IDS:
+        USAGE = "Usage:\n/whitelist [ request ]"
 
     args = message.text.split(" ")[1:]
-    if len(args) == 0 or (args[0] in {"add", "remove"} and len(args) < 2):
+    if len(args) == 0 or (args[0] in {"add", "remove", "accept", "reject"} and len(args) < 2):
+        return await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
+
+    if message.from_user.id not in ADMIN_IDS and args[0] != "request":
         return await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
 
     match args[0]:
@@ -37,22 +42,44 @@ async def whitelist_command(_, message: Message):
             users = await WlUser.all()
             user_ids = "\n".join([f"  - {user.id}" + (f" ({user.desc})" if user.desc else "") for user in users])
             await message.reply_text(f"Users:\n\n{user_ids}")
-        case "add":
+        case "add" | "accept":
             if not args[1].isdigit():
                 return await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
             user_id = int(args[1])
-            if await WlUser.filter(id=user_id).exists():
-                return await message.reply_text("Already exists!")
-            await WlUser.create(id=user_id)
-            await message.reply_text("Created!")
-        case "remove":
+            await WlUser.update_or_create(id=user_id, default={"whitelisted": True})
+            await message.reply_text("User added to whitelist!")
+            await bot.send_message(user_id, "You were added to whitelist!")
+        case "remove" | "reject":
             if not args[1].isdigit():
                 return await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
             user_id = int(args[1])
             if (user := await WlUser.get_or_none(id=user_id)) is None:
                 return await message.reply_text("User does not exists!")
             await user.delete()
-            await message.reply_text("Deleted!")
+            if user.whitelisted:
+                await message.reply_text("User removed from whitelist!")
+            else:
+                await message.reply_text("User's whitelist request was rejected!")
+            await bot.send_message(user_id, "You were removed from whitelist!")
+        case "request":
+            if message.from_user.id in ADMIN_IDS:
+                return await message.reply_text("What is wrong with you?")
+
+            user = await WlUser.get_or_none(id=message.from_user.id)
+            if user is not None and user.whitelisted:
+                return await message.reply_text("You already added to whitelist!")
+            if user is not None and not user.whitelisted:
+                return await message.reply_text("You already sent whitelist request!")
+
+            await WlUser.create(id=message.from_user.id, whitelisted=False)
+            await message.reply_text("Whitelist request sent!")
+            for admin_id in ADMIN_IDS:
+                user_info = f"[{message.from_user.first_name}](tg://user?id=message.from_user.id)"
+                if message.from_user.username:
+                    user_info += f" (@{message.from_user.username})"
+                await bot.send_message(
+                    admin_id, f"New whitelist request from {user_info}", parse_mode=ParseMode.MARKDOWN,
+                )
         case _:
             await message.reply_text(USAGE, parse_mode=ParseMode.DISABLED)
 
@@ -61,7 +88,8 @@ async def whitelist_command(_, message: Message):
 async def register_command(_, message: Message):
     USAGE = "Usage:\n/register <login: string> <password: string>"
 
-    if (user := await WlUser.get_or_none(id=message.from_user.id)) is None and message.from_user.id not in ADMIN_IDS:
+    if ((user := await WlUser.get_or_none(id=message.from_user.id)) is None or not user.whitelisted) \
+            and message.from_user.id not in ADMIN_IDS:
         return
 
     args = message.text.split(" ")[1:]
@@ -109,6 +137,7 @@ async def user_command(_, message: Message):
         case "view":
             await message.reply_text(f"Info about user {user_id}:\n\n"
                                      f"Id: `{user_id}`\n"
+                                     f"Whitelisted: `{user.whitelisted}`\n"
                                      f"Description: `{user.desc}`\n"
                                      f"WLMC id: `{user.wlmc_id}`")
         case "change":
@@ -143,7 +172,8 @@ async def user_command(_, message: Message):
 
 @bot.on_message(filters.command("skin"))
 async def user_command(_, message: Message):
-    if (user := await WlUser.get_or_none(id=message.from_user.id)) is None and message.from_user.id not in ADMIN_IDS:
+    if ((user := await WlUser.get_or_none(id=message.from_user.id)) is None or not user.whitelisted) \
+            and message.from_user.id not in ADMIN_IDS:
         return
     if user.wlmc_id is None:
         return await message.reply(f"No wlmc user is associated with your telegram account!")
